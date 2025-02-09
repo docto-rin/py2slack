@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "py2slack"
-version = "0.1.0"
+version = "0.2.0"
 description = "Utility functions to send Slack notifications using slack_sdk."
 readme = "README.md"
 requires-python = ">=3.6"

@@ -1,5 +1,7 @@
 import os
 import json
+import sys
+import traceback
 from typing import Dict, Optional, Tuple, Any
 from importlib.util import find_spec
 
@@ -19,14 +21,10 @@ CONFIG_FILE = 'slack_config.json' # No additional libraries required
 
 """
 Directory Structure:
-    your_project
+    your_project_root
     │
     ├── .env               ← Add to .gitignore to protect sensitive data
-    ├── slack_config.json  ← Add to .gitignore to protect sensitive data
-    │
-    └── utils
-        ├── __init__.py    ← Either leave empty or add: from .py2slack import send_slack
-        └── py2slack.py ← This file (containing the Slack utility functions)
+    └── slack_config.json  ← Add to .gitignore to protect sensitive data
 
 Configuration Files (prepare ONE of the following):
     1. .env file:
@@ -58,16 +56,6 @@ Notes:
     1. Prepare EITHER slack_config.json OR .env file, not both.
     2. Add both slack_config.json and .env to .gitignore to prevent committing sensitive data.
     3. Remember to invite the created app bot to the Slack channel where notifications will be sent.
-    4. The content of __init__.py affects how to import the send_slack function:
-
-        a. If __init__.py is empty:
-            Use: from utils.py2slack import send_slack
-
-        b. If __init__.py contains "from .py2slack import send_slack":
-            Use: from utils import send_slack
-
-    This difference stems from Python's module system. Explicit importing in __init__.py
-    allows direct import of the function from the utils package.
 """
 
 def load_env_vars() -> Dict[str, str]:
@@ -207,6 +195,23 @@ def send_slack(text: str = "", file: Optional[str] = None, channel: Optional[str
     except Exception as e:
         print(f"Unexpected error while sending message: {e}")
 
+def slack_notify(func):
+    def wrapper(*args, **kwargs):
+        script_name = os.path.basename(sys.argv[0])
+        try:
+            result = func(*args, **kwargs)
+            send_slack(f"[{script_name}] Process completed successfully!")
+            return result
+        except Exception as e:
+            error_message = (
+                f"[{script_name}] An error occurred:\n{str(e)}\n\n"
+                f"Traceback:\n{traceback.format_exc()}"
+            )
+            print(error_message)
+            send_slack(error_message)
+            raise e
+    return wrapper
+
 # Usage example
 if __name__ == "__main__":
     send_slack("Hello, Slack!")
@@ -215,18 +220,18 @@ if __name__ == "__main__":
     # send_slack("Hello, specific channel!", channel="C1234567890")
     # send_slack(file="path/to/image.png", channel="C1234567890")
 
-    # # Error handling and traceback sending example (for use in main.py)
-    # import traceback
-    # import sys
-    # from utils import send_slack
+    ### Error handling and traceback sending example (for use in main.py)
+    # from py2slack import slack_notify
 
-    # def main():
-    #     try:
-    #         # Your main code here...
-    #         send_slack("Process completed successfully!")
-    #     except Exception as e:
-    #         error_message = f"An error occurred:\n{str(e)}\n\nTraceback:\n{traceback.format_exc()}"
-    #         print(error_message)
-    #         send_slack(error_message)
-    #         sys.exit(1)
-    # main()
+    # @slack_notify
+    # def main1():
+    #     print("Running main1 process...")
+
+    # @slack_notify
+    # def main2():
+    #     print("Running main2 process...")
+    #     raise Exception("Error in main2")
+
+    # if __name__ == '__main__':
+    #     main1()
+    #     main2()
