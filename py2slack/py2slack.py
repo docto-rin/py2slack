@@ -58,7 +58,7 @@ Notes:
     3. Remember to invite the created app bot to the Slack channel where notifications will be sent.
 """
 
-def load_env_vars() -> Dict[str, str]:
+def load_from_dotenv_file() -> Dict[str, str]:
     config = {}
     try:
         dotenv_spec = find_spec('dotenv')
@@ -94,17 +94,28 @@ def load_env_vars() -> Dict[str, str]:
 
 def load_slack_config() -> Dict[str, str]:
     config = {}
-    
-    # First, try to load from .env file
-    if os.path.exists(ENV_FILE):
-        config = load_env_vars()
-    
-    # If any config is missing, try to load from JSON file
-    if len(config) < 2:
-        missing = set(['oauth_token', 'default_channel']) - set(config.keys())
+
+    # Step 1: Try to load configuration from environment variables.
+    oauth_token = os.getenv('SLACK_OAUTH_TOKEN')
+    default_channel = os.getenv('SLACK_DEFAULT_CHANNEL')
+    if oauth_token:
+        config['oauth_token'] = oauth_token
+    if default_channel:
+        config['default_channel'] = default_channel
+
+    # Step 2: If any configuration is missing, try to load from the .env file.
+    missing = {'oauth_token', 'default_channel'} - config.keys()
+    if missing and os.path.exists(ENV_FILE):
+        env_config = load_from_dotenv_file()
+        for key in missing:
+            if key in env_config:
+                config[key] = env_config[key]
+
+    # Step 3: If configuration is still missing, try to load from the JSON file.
+    missing = {'oauth_token', 'default_channel'} - config.keys()
+    if missing:
         if os.path.exists(ENV_FILE):
             print(f"Attempting to load missing configuration ({', '.join(missing)}) from '{CONFIG_FILE}'.")
-        
         try:
             with open(CONFIG_FILE) as f:
                 json_config = json.load(f)
@@ -120,12 +131,12 @@ def load_slack_config() -> Dict[str, str]:
             print(f"Warning: Invalid JSON in configuration file '{CONFIG_FILE}'.")
         except Exception as e:
             print(f"Unexpected error while loading config from JSON: {e}")
-    
-    # Final check for missing configuration
-    missing = set(['oauth_token', 'default_channel']) - set(config.keys())
+
+    # Final check for any still missing configuration values.
+    missing = {'oauth_token', 'default_channel'} - config.keys()
     if missing:
         print(f"Warning: The following configuration is still missing: {', '.join(missing)}")
-    
+
     return config
 
 def initialize_slack_client() -> Tuple[Optional[WebClient], Optional[str]]:
