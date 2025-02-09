@@ -105,7 +105,7 @@ def load_slack_config() -> Dict[str, str]:
 
     # Step 2: If any configuration is missing, try to load from the .env file.
     missing = {'oauth_token', 'default_channel'} - config.keys()
-    if missing and os.path.exists(ENV_FILE):
+    if missing or os.path.exists(ENV_FILE):
         env_config = load_from_dotenv_file()
         for key in missing:
             if key in env_config:
@@ -113,20 +113,13 @@ def load_slack_config() -> Dict[str, str]:
 
     # Step 3: If configuration is still missing, try to load from the JSON file.
     missing = {'oauth_token', 'default_channel'} - config.keys()
-    if missing:
-        if os.path.exists(ENV_FILE):
-            print(f"Attempting to load missing configuration ({', '.join(missing)}) from '{CONFIG_FILE}'.")
+    if missing or os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE) as f:
                 json_config = json.load(f)
                 for key in missing:
                     if key in json_config:
                         config[key] = json_config[key]
-        except FileNotFoundError:
-            if os.path.exists(ENV_FILE):
-                print(f"Warning: '{CONFIG_FILE}' not found.")
-            else:
-                print(f"Warning: Neither '{ENV_FILE}' nor '{CONFIG_FILE}' found.")
         except json.JSONDecodeError:
             print(f"Warning: Invalid JSON in configuration file '{CONFIG_FILE}'.")
         except Exception as e:
@@ -136,6 +129,14 @@ def load_slack_config() -> Dict[str, str]:
     missing = {'oauth_token', 'default_channel'} - config.keys()
     if missing:
         print(f"Warning: The following configuration is still missing: {', '.join(missing)}")
+        if not os.path.exists(ENV_FILE) and not os.path.exists(CONFIG_FILE):
+            print(f"Warning: Both '{ENV_FILE}' and '{CONFIG_FILE}' are missing.")
+        elif not os.path.exists(ENV_FILE):
+            print(f"Warning: '{ENV_FILE}' is missing.")
+        elif not os.path.exists(CONFIG_FILE):
+            print(f"Warning: '{CONFIG_FILE}' is missing.")
+        else:
+            print(f"Warning: Both '{ENV_FILE}' and '{CONFIG_FILE}' are present, but still missing configuration.")
 
     return config
 
