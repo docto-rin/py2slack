@@ -4,10 +4,12 @@ import os
 import sys
 import time
 import traceback
-from typing import Optional
+from functools import wraps
+from typing import Optional, Callable, TypeVar
 from slack_sdk.errors import SlackApiError
 from .auth import CLIENT, DEFAULT_CHANNEL
 
+F = TypeVar("F", bound=Callable[..., object])
 
 def send_slack(text: str = "", file: Optional[str] = None, channel: Optional[str] = None) -> None:
     """
@@ -75,20 +77,20 @@ def format_duration(elapsed: float) -> str:
         parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
     if minutes > 0:
         parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
-    # Always show seconds if nothing else is added or if seconds are non-zero.
     if seconds > 0 or not parts:
         parts.append(f"{seconds:.2f} second{'s' if seconds != 1 else ''}")
     
     return ', '.join(parts)
 
-def slack_notify(func):
+def slack_notify(func: F) -> F:
     """
     Decorator that sends a Slack notification upon completion or error of the decorated function.
     The notification includes the original function name and a human-friendly formatted execution time.
     """
+    @wraps(func)
     def wrapper(*args, **kwargs):
         start_time = time.time()
-        script_name = os.path.basename(sys.argv[0])
+        script_name = os.path.basename(sys.argv[0]) if sys.argv else "unknown"
         try:
             result = func(*args, **kwargs)
             elapsed = time.time() - start_time
@@ -104,5 +106,5 @@ def slack_notify(func):
             )
             print(error_message)
             send_slack(error_message)
-            raise e
+            raise
     return wrapper
