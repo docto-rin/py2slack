@@ -2,52 +2,36 @@
 
 import os
 import json
-import traceback
-from typing import Dict, Optional, Tuple, Any
-from importlib.util import find_spec
+from typing import Dict, Optional, Tuple
+from slack_sdk import WebClient
 
-# Import Slack SDK
-try:
-    from slack_sdk import WebClient
-    from slack_sdk.errors import SlackApiError
-    slack_sdk_imported = True
-except ImportError:
-    print("Warning: slack_sdk library not found. Slack functionality will be disabled.")
-    slack_sdk_imported = False
-    WebClient = Any
-    SlackApiError = Any
 
 # Define paths for configuration files
-ENV_FILE = '.env'  # Requires python-dotenv library if using .env
+ENV_FILE = '.env'            # .env file (requires python-dotenv)
 CONFIG_FILE = 'slack_config.json'  # JSON configuration file
 
 def load_from_dotenv_file() -> Dict[str, str]:
     """Load configuration from a .env file."""
     config = {}
     try:
-        dotenv_spec = find_spec('dotenv')
-        if dotenv_spec is not None:
-            from dotenv import load_dotenv
-            load_dotenv(ENV_FILE)
-        else:
-            print("Warning: python-dotenv library not found. Unable to load .env file.")
-            print("To use .env file, please install python-dotenv: pip install python-dotenv")
-            return config
-
+        # Use python-dotenv to load environment variables from the file
+        from dotenv import load_dotenv
+        load_dotenv(ENV_FILE)
+        
         oauth_token = os.getenv('SLACK_OAUTH_TOKEN')
         default_channel = os.getenv('SLACK_DEFAULT_CHANNEL')
-
+        
         if oauth_token:
             config['oauth_token'] = oauth_token
         if default_channel:
             config['default_channel'] = default_channel
-
+        
         missing = []
         if 'oauth_token' not in config:
             missing.append('SLACK_OAUTH_TOKEN')
         if 'default_channel' not in config:
             missing.append('SLACK_DEFAULT_CHANNEL')
-
+        
         if missing:
             print(f"Warning: The following variables are missing in the '{ENV_FILE}' file: {', '.join(missing)}")
         
@@ -76,7 +60,7 @@ def load_slack_config() -> Dict[str, str]:
             if key in env_config:
                 config[key] = env_config[key]
 
-    # Step 3: Load from JSON file if still missing configuration
+    # Step 3: Load from JSON file if configuration is still missing
     missing = {'oauth_token', 'default_channel'} - config.keys()
     if missing or os.path.exists(CONFIG_FILE):
         try:
@@ -90,7 +74,7 @@ def load_slack_config() -> Dict[str, str]:
         except Exception as e:
             print(f"Unexpected error while loading config from JSON: {e}")
 
-    # Final check for any missing configuration values
+    # Final check for missing configuration values
     missing = {'oauth_token', 'default_channel'} - config.keys()
     if missing:
         print(f"Warning: The following configuration is still missing: {', '.join(missing)}")
@@ -107,28 +91,21 @@ def load_slack_config() -> Dict[str, str]:
 
 def initialize_slack_client() -> Tuple[Optional[WebClient], Optional[str]]:
     """Initialize the Slack client using the loaded configuration."""
-    if not slack_sdk_imported:
+    config = load_slack_config()
+    slack_token = config.get('oauth_token')
+    default_channel = config.get('default_channel')
+    
+    if not slack_token:
+        print("Warning: Missing 'oauth_token' in configuration. Slack functionality will be disabled.")
         return None, None
-
+    
     try:
-        config = load_slack_config()
-        slack_token = config.get('oauth_token')
-        default_channel = config.get('default_channel')
-        
-        if not slack_token:
-            print("Warning: Missing 'oauth_token' in configuration. Slack functionality will be disabled.")
-            return None, None
-        
-        try:
-            client = WebClient(token=slack_token)
-            # Test the connection
-            client.auth_test()
-            return client, default_channel  # default_channel can be None
-        except Exception as e:
-            print(f"Error initializing Slack client: {e}")
-            return None, None
+        client = WebClient(token=slack_token)
+        # Test the connection
+        client.auth_test()
+        return client, default_channel  # default_channel can be None
     except Exception as e:
-        print(f"Unexpected error initializing Slack client: {e}")
+        print(f"Error initializing Slack client: {e}")
         return None, None
 
 # Initialize the Slack client as constants
